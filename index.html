@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raft 2D Survival</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui-overlay">
+            <div id="stats">
+                <div>Health: <span id="health">100</span></div>
+                <div>Hunger: <span id="hunger">100</span></div>
+                <div>Thirst: <span id="thirst">100</span></div>
+                <div id="oxygen-container" style="display:none">Oxygen: <span id="oxygen">100</span></div>
+            </div>
+            <div id="crafting" style="display:none">
+                <h3>Crafting (C to close)</h3>
+                <div class="craft-item" onclick="craft('raft')">Raft Block (2 Wood, 2 Plastic)</div>
+                <div class="craft-item" onclick="craft('hook')">Hook (3 Plastic, 1 Leaf)</div>
+                <div class="craft-item" onclick="craft('cup')">Cup (2 Plastic)</div>
+                <div class="craft-item" onclick="craft('purifier')">Water Purifier (3 Plastic, 2 Wood)</div>
+                <div class="craft-item" onclick="craft('rod')">Fishing Rod (2 Wood, 2 Leaf)</div>
+                <div class="craft-item" onclick="craft('cooker')">Cook Station (3 Wood, 1 Plastic)</div>
+            </div>
+        </div>
+        <div id="bottom-ui">
+            <div id="action-prompts"></div>
+            <div id="inventory">
+                <ul id="inventory-list"></ul>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
