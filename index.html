@@ -1,38 +1,257 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raft 2D Survival</title>
+    <title>木筏求生 2D - 海洋生存遊戲</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
+        
         <div id="ui-overlay">
-            <div id="stats">
-                <div>Health: <span id="health">100</span></div>
-                <div>Hunger: <span id="hunger">100</span></div>
-                <div>Thirst: <span id="thirst">100</span></div>
-                <div id="oxygen-container" style="display:none">Oxygen: <span id="oxygen">100</span></div>
+            <!-- 生存指標面板 -->
+            <div id="stats-panel">
+                <h2><i class="fas fa-heartbeat"></i> 生存指標</h2>
+                <div class="stat">
+                    <div class="stat-label">
+                        <i class="fas fa-heart"></i> 生命
+                        <span id="health-value">100</span>%
+                    </div>
+                    <div class="stat-bar">
+                        <div id="health-bar" class="bar-fill" style="width: 100%;"></div>
+                    </div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">
+                        <i class="fas fa-hamburger"></i> 飢餓
+                        <span id="hunger-value">100</span>%
+                    </div>
+                    <div class="stat-bar">
+                        <div id="hunger-bar" class="bar-fill" style="width: 100%;"></div>
+                    </div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">
+                        <i class="fas fa-tint"></i> 口渴
+                        <span id="thirst-value">100</span>%
+                    </div>
+                    <div class="stat-bar">
+                        <div id="thirst-bar" class="bar-fill" style="width: 100%;"></div>
+                    </div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">
+                        <i class="fas fa-wind"></i> 氧氣
+                        <span id="oxygen-value">100</span>%
+                    </div>
+                    <div class="stat-bar">
+                        <div id="oxygen-bar" class="bar-fill" style="width: 100%;"></div>
+                    </div>
+                </div>
             </div>
-            <div id="crafting" style="display:none">
-                <h3>Crafting (C to close)</h3>
-                <div class="craft-item" onclick="craft('raft')">Raft Block (2 Wood, 2 Plastic)</div>
-                <div class="craft-item" onclick="craft('hook')">Hook (3 Plastic, 1 Leaf)</div>
-                <div class="craft-item" onclick="craft('cup')">Cup (2 Plastic)</div>
-                <div class="craft-item" onclick="craft('purifier')">Water Purifier (3 Plastic, 2 Wood)</div>
-                <div class="craft-item" onclick="craft('rod')">Fishing Rod (2 Wood, 2 Leaf)</div>
-                <div class="craft-item" onclick="craft('cooker')">Cook Station (3 Wood, 1 Plastic)</div>
+
+            <!-- 製作菜單 -->
+            <div id="crafting-panel" class="hidden">
+                <h2><i class="fas fa-hammer"></i> 製作菜單</h2>
+                <div class="crafting-grid">
+                    <div class="crafting-item" data-recipe="rope">
+                        <div class="crafting-icon"><i class="fas fa-link"></i></div>
+                        <div class="crafting-name">繩子</div>
+                        <div class="crafting-cost">樹葉: 2</div>
+                        <button class="craft-btn" data-recipe="rope">製作</button>
+                    </div>
+                    <div class="crafting-item" data-recipe="raft">
+                        <div class="crafting-icon"><i class="fas fa-th-large"></i></div>
+                        <div class="crafting-name">木筏方格</div>
+                        <div class="crafting-cost">木頭: 1, 塑膠: 1, 繩子: 1</div>
+                        <button class="craft-btn" data-recipe="raft">製作</button>
+                    </div>
+                    <div class="crafting-item" data-recipe="hook">
+                        <div class="crafting-icon"><i class="fas fa-anchor"></i></div>
+                        <div class="crafting-name">鉤子</div>
+                        <div class="crafting-cost">塑膠: 2, 繩子: 1</div>
+                        <button class="craft-btn" data-recipe="hook">製作</button>
+                    </div>
+                    <div class="crafting-item" data-recipe="cup">
+                        <div class="crafting-icon"><i class="fas fa-glass-whiskey"></i></div>
+                        <div class="crafting-name">杯子</div>
+                        <div class="crafting-cost">塑膠: 2</div>
+                        <button class="craft-btn" data-recipe="cup">製作</button>
+                    </div>
+                    <div class="crafting-item" data-recipe="purifier">
+                        <div class="crafting-icon"><i class="fas fa-filter"></i></div>
+                        <div class="crafting-name">淨水器</div>
+                        <div class="crafting-cost">塑膠: 2, 木頭: 1, 繩子: 1</div>
+                        <button class="craft-btn" data-recipe="purifier">製作</button>
+                    </div>
+                    <div class="crafting-item" data-recipe="fishingRod">
+                        <div class="crafting-icon"><i class="fas fa-fish"></i></div>
+                        <div class="crafting-name">釣魚竿</div>
+                        <div class="crafting-cost">木頭: 1, 繩子: 1</div>
+                        <button class="craft-btn" data-recipe="fishingRod">製作</button>
+                    </div>
+                    <div class="crafting-item" data-recipe="cookStation">
+                        <div class="crafting-icon"><i class="fas fa-fire"></i></div>
+                        <div class="crafting-name">烹飪站</div>
+                        <div class="crafting-cost">木頭: 2, 繩子: 1</div>
+                        <button class="craft-btn" data-recipe="cookStation">製作</button>
+                    </div>
+                    <div class="crafting-item" data-recipe="collectionNet">
+                        <div class="crafting-icon"><i class="fas fa-network-wired"></i></div>
+                        <div class="crafting-name">物品收集網</div>
+                        <div class="crafting-cost">繩子: 6, 木頭: 2</div>
+                        <button class="craft-btn" data-recipe="collectionNet">製作</button>
+                    </div>
+                </div>
+                <!-- 资源数量现在只显示在物品栏中 -->
             </div>
         </div>
+
+        <!-- 底部UI -->
         <div id="bottom-ui">
-            <div id="action-prompts"></div>
-            <div id="inventory">
-                <ul id="inventory-list"></ul>
+            <div id="action-prompts">
+                <div id="prompt-text">使用 WASD 或方向鍵移動，滑鼠左鍵發射鉤子，按 C 打開製作菜單</div>
+            </div>
+            
+            <!-- Actions面板 - 显示可用操作 -->
+            <div id="actions-panel">
+                <div id="actions-slots">
+                    <!-- Actions將由JavaScript動態生成 -->
+                </div>
+            </div>
+            
+            <div id="inventory-panel">
+                <div id="inventory-slots">
+                    <!-- 物品欄位將由JavaScript動態生成 -->
+                    <!-- 工具將作為特殊物品顯示在這裡 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 遊戲控制提示 -->
+        <div id="controls-hint">
+            <div class="control">
+                <kbd>WASD</kbd> <span>移動</span>
+            </div>
+            <div class="control">
+                <kbd>滑鼠左鍵</kbd> <span>發射鉤子</span>
+            </div>
+            <div class="control">
+                <kbd>C</kbd> <span>製作菜單</span>
+            </div>
+            <div class="control">
+                <kbd>1-4</kbd> <span>快捷操作</span>
+            </div>
+        </div>
+
+        <!-- 遊戲開始畫面 -->
+        <div id="start-screen" class="overlay-screen">
+            <div class="overlay-content">
+                <h1><i class="fas fa-water"></i> 木筏求生 2D</h1>
+                <p class="subtitle">在浩瀚海洋中生存，收集資源，擴建木筏，管理生存指標</p>
+                
+                <div class="instructions">
+                    <h3><i class="fas fa-info-circle"></i> 遊戲目標</h3>
+                    <ul>
+                        <li>收集漂浮資源（木頭、塑膠、樹葉）</li>
+                        <li>製作工具和建築擴建木筏</li>
+                        <li>管理健康、飢餓、口渴和氧氣</li>
+                        <li>建造工作站生產食物和飲水</li>
+                        <li>在無盡的海洋中盡可能長時間生存</li>
+                    </ul>
+                </div>
+                
+                <div class="controls-details">
+                    <h3><i class="fas fa-keyboard"></i> 按鍵操作詳情</h3>
+                    <div class="controls-grid">
+                        <div class="control-item">
+                            <div class="control-key">WASD / 方向鍵</div>
+                            <div class="control-desc">移動玩家角色</div>
+                        </div>
+                        <div class="control-item">
+                            <div class="control-key">滑鼠左鍵</div>
+                            <div class="control-desc">發射鉤子收集資源</div>
+                        </div>
+                        <div class="control-item">
+                            <div class="control-key">C 鍵</div>
+                            <div class="control-desc">打開/關閉製作菜單</div>
+                        </div>
+                        <div class="control-item">
+                            <div class="control-key">數字鍵 1-4</div>
+                            <div class="control-desc">快捷操作（對應Actions面板）</div>
+                        </div>
+                        <div class="control-item">
+                            <div class="control-key">E 鍵</div>
+                            <div class="control-desc">執行第一個快捷操作</div>
+                        </div>
+                        <div class="control-item">
+                            <div class="control-key">ESC 鍵</div>
+                            <div class="control-desc">取消放置模式</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="start-btn" class="btn-primary">
+                    <i class="fas fa-play"></i> 開始遊戲
+                </button>
+                
+                <div class="difficulty-selector">
+                    <h3>選擇難度</h3>
+                    <div class="difficulty-options">
+                        <button class="difficulty-btn active" data-difficulty="easy">簡單</button>
+                        <button class="difficulty-btn" data-difficulty="normal">普通</button>
+                        <button class="difficulty-btn" data-difficulty="hard">困難</button>
+                    </div>
+                    <div id="difficulty-details" class="difficulty-details">
+                        <h4><i class="fas fa-info-circle"></i> 難度詳情：簡單</h4>
+                        <ul>
+                            <li>飢餓下降速度：慢</li>
+                            <li>口渴下降速度：慢</li>
+                            <li>氧氣消耗速度：慢</li>
+                            <li>資源生成率：高</li>
+                            <li>適合新手玩家</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 遊戲結束畫面 -->
+        <div id="game-over-screen" class="overlay-screen hidden">
+            <div class="overlay-content">
+                <h1><i class="fas fa-skull-crossbones"></i> 遊戲結束</h1>
+                <p class="subtitle">你的生存之旅已經結束</p>
+                
+                <div id="game-stats">
+                    <div class="stat-result">
+                        <span>生存時間:</span>
+                        <span id="survival-time">00:00</span>
+                    </div>
+                    <div class="stat-result">
+                        <span>收集資源:</span>
+                        <span id="total-resources">0</span>
+                    </div>
+                    <div class="stat-result">
+                        <span>木筏大小:</span>
+                        <span id="raft-size">2x2</span>
+                    </div>
+                    <div class="stat-result">
+                        <span>製作物品:</span>
+                        <span id="crafted-items">0</span>
+                    </div>
+                </div>
+                
+                <button id="restart-btn" class="btn-primary">
+                    <i class="fas fa-redo"></i> 重新開始
+                </button>
             </div>
         </div>
     </div>
+
     <script src="game.js"></script>
 </body>
 </html>
