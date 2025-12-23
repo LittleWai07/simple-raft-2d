@@ -1018,6 +1018,9 @@ const Game = {
         // 限制鲨鱼数量（最多2只）
         if (this.sharks.length >= 2) return;
         
+        // 游戏开始后的保护期：前10秒不生成鲨鱼
+        if (this.gameTime < 10) return;
+        
         // 鲨鱼生成率：每秒有30%机会生成一只鲨鱼（大幅提高生成率）
         if (Math.random() < 0.3 * this.deltaTime) {
             // 从屏幕边缘生成鲨鱼
@@ -1053,7 +1056,10 @@ const Game = {
                 targetY: this.player.y,
                 attackCooldown: 0, // 攻击玩家冷却时间
                 raftAttackCooldown: 0, // 攻击木筏冷却时间（3分钟）
-                damage: 10 // 每次攻击造成的伤害
+                damage: 10, // 每次攻击造成的伤害
+                direction: 0, // 新增：鲨鱼面向方向（弧度）
+                lastX: x, // 新增：上一帧的X位置
+                lastY: y  // 新增：上一帧的Y位置
             };
             
             this.sharks.push(shark);
@@ -1076,10 +1082,27 @@ const Game = {
                 shark.raftAttackCooldown -= this.deltaTime;
             }
             
-            // 如果玩家在木筏上，鲨鱼会随机游动
-            if (!this.player.isSwimming) {
-                // 随机游动
-                if (Math.random() < 0.01) {
+            // 如果鲨鱼正在游走（攻击玩家后），更新游走时间
+            if (shark.isFleeing) {
+                shark.fleeTime -= this.deltaTime;
+                if (shark.fleeTime <= 0) {
+                    shark.isFleeing = false;
+                }
+            }
+            
+            // 设置鲨鱼目标
+            if (shark.isFleeing) {
+                // 如果鲨鱼正在游走，保持随机目标
+                // 不需要更新目标，保持攻击时设置的随机目标
+            } else if (!this.player.isSwimming) {
+                // 如果玩家在木筏上，鲨鱼会随机游动
+                // 只有当鲨鱼到达当前目标或随机概率时，才更新目标
+                const dx = shark.targetX - shark.x;
+                const dy = shark.targetY - shark.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // 如果鲨鱼已经到达目标位置，或者随机概率，才更新目标
+                if (distance < 10 || Math.random() < 0.01) {
                     shark.targetX = Math.random() * this.canvas.width;
                     shark.targetY = Math.random() * this.canvas.height;
                 }
@@ -1096,8 +1119,14 @@ const Game = {
             
             // 移动鲨鱼
             if (distance > 0) {
+                // 计算移动方向（弧度）
+                shark.direction = Math.atan2(dy, dx);
+                
                 shark.x += (dx / distance) * shark.speed;
                 shark.y += (dy / distance) * shark.speed;
+            } else {
+                // 当鲨鱼不移动时，保持当前方向不变
+                // 不更新shark.direction
             }
             
             // 检查鲨鱼与玩家的碰撞（攻击玩家）
@@ -1108,24 +1137,45 @@ const Game = {
                 const playerDistance = Math.sqrt(playerDx * playerDx + playerDy * playerDy);
                 
                 if (playerDistance < this.player.radius + shark.radius && shark.attackCooldown <= 0) {
-                    // 根据难度调整鲨鱼攻击伤害
-                    let damage = 10; // 默认伤害
+                    // 根据难度调整鲨鱼攻击伤害（提升50%）
+                    let damage = 15; // 默认伤害
                     switch(this.difficulty) {
                         case 'easy':
-                            damage = 8; // 简单难度：伤害较低
+                            damage = 12; // 简单难度：从8点提升到12点（提升50%）
                             break;
                         case 'normal':
-                            damage = 10; // 普通难度：正常伤害
+                            damage = 15; // 普通难度：从10点提升到15点（提升50%）
                             break;
                         case 'hard':
-                            damage = 15; // 困难难度：伤害较高
+                            damage = 22; // 困难难度：从15点提升到22点（提升约47%，取整）
                             break;
                     }
                     
                     // 鲨鱼攻击玩家
                     this.stats.health = Math.max(0, this.stats.health - damage);
-                    shark.attackCooldown = 2; // 2秒攻击冷却时间
-                    this.updatePrompt(`鯊魚攻擊！生命值減少 ${damage} 點！`);
+                    
+                    // 根据难度设置攻击冷却时间
+                    let attackCooldown = 5; // 默认简单难度
+                    switch(this.difficulty) {
+                        case 'easy':
+                            attackCooldown = 5; // 简单难度：5秒冷却时间
+                            break;
+                        case 'normal':
+                            attackCooldown = 4; // 普通难度：4秒冷却时间
+                            break;
+                        case 'hard':
+                            attackCooldown = 3; // 困难难度：3秒冷却时间
+                            break;
+                    }
+                    shark.attackCooldown = attackCooldown;
+                    
+                    // 攻击后鲨鱼游走（设置随机目标，并标记为正在游走）
+                    shark.targetX = Math.random() * this.canvas.width;
+                    shark.targetY = Math.random() * this.canvas.height;
+                    shark.isFleeing = true; // 标记鲨鱼正在游走
+                    shark.fleeTime = 2.0; // 游走时间2秒
+                    
+                    this.updatePrompt(`鯊魚攻擊！生命值減少 ${damage} 點！鯊魚攻擊後游走，${attackCooldown}秒後會再次攻擊。`);
                     this.updateStatsUI();
                 }
             }
@@ -1140,39 +1190,57 @@ const Game = {
                     if (raftDx < raftPiece.size / 2 + shark.radius && raftDy < raftPiece.size / 2 + shark.radius) {
                         // 检查鲨鱼的攻击木筏冷却时间（根据难度调整）
                         if (shark.raftAttackCooldown <= 0) {
-                            // 25%机率对木筏方块造成耐久度耗损
-                            if (Math.random() < 0.25) {
-                                // 随机减少1-2点耐久度
-                                const damage = Math.floor(Math.random() * 2) + 1; // 1-2点
-                                raftPiece.durability -= damage;
-                                
-                                // 根据难度设置冷却时间
-                                let cooldownTime = 20; // 默认简单难度
-                                switch(this.difficulty) {
-                                    case 'easy':
-                                        cooldownTime = 20;
-                                        break;
-                                    case 'normal':
-                                        cooldownTime = 12;
-                                        break;
-                                    case 'hard':
-                                        cooldownTime = 8;
-                                        break;
+                                // 25%机率对木筏方块造成耐久度耗损
+                                if (Math.random() < 0.25) {
+                                    // 根据难度随机减少耐久度
+                                    let minDamage = 1;
+                                    let maxDamage = 3;
+                                    
+                                    switch(this.difficulty) {
+                                        case 'easy':
+                                            minDamage = 1;
+                                            maxDamage = 3; // 1-3点
+                                            break;
+                                        case 'normal':
+                                            minDamage = 3;
+                                            maxDamage = 5; // 3-5点
+                                            break;
+                                        case 'hard':
+                                            minDamage = 5;
+                                            maxDamage = 7; // 5-7点
+                                            break;
+                                    }
+                                    
+                                    const damage = Math.floor(Math.random() * (maxDamage - minDamage + 1)) + minDamage;
+                                    raftPiece.durability -= damage;
+                                    
+                                    // 根据难度设置冷却时间（进一步缩短）
+                                    let cooldownTime = 15; // 默认简单难度
+                                    switch(this.difficulty) {
+                                        case 'easy':
+                                            cooldownTime = 15; // 从20秒缩短到15秒
+                                            break;
+                                        case 'normal':
+                                            cooldownTime = 10; // 从12秒缩短到10秒
+                                            break;
+                                        case 'hard':
+                                            cooldownTime = 6; // 从8秒缩短到6秒
+                                            break;
+                                    }
+                                    shark.raftAttackCooldown = cooldownTime;
+                                    
+                                    // 检查木筏方块耐久度是否归零
+                                    if (raftPiece.durability <= 0) {
+                                        // 木筏方块被破坏移除
+                                        this.raft.splice(j, 1);
+                                        this.updatePrompt('木筏方格被鯊魚破壞！');
+                                        // 检查连锁反应
+                                        this.checkChainReaction();
+                                    } else {
+                                        // 显示耐久度减少提示
+                                        this.updatePrompt(`木筏方格受到攻擊！耐久度減少 ${damage} 點，當前耐久度：${raftPiece.durability}/${raftPiece.maxDurability}`);
+                                    }
                                 }
-                                shark.raftAttackCooldown = cooldownTime;
-                                
-                                // 检查木筏方块耐久度是否归零
-                                if (raftPiece.durability <= 0) {
-                                    // 木筏方块被破坏移除
-                                    this.raft.splice(j, 1);
-                                    this.updatePrompt('木筏方格被鯊魚破壞！');
-                                    // 检查连锁反应
-                                    this.checkChainReaction();
-                                } else {
-                                    // 显示耐久度减少提示
-                                    this.updatePrompt(`木筏方格受到攻擊！耐久度減少 ${damage} 點，當前耐久度：${raftPiece.durability}/${raftPiece.maxDurability}`);
-                                }
-                            }
                         }
                     }
                 }
@@ -1363,6 +1431,24 @@ const Game = {
                 const dy = this.player.y - hook.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 
+                // 在钩子回收时也检查与资源的碰撞
+                for (let j = this.resources.length - 1; j >= 0; j--) {
+                    const resource = this.resources[j];
+                    const resourceDx = hook.x - resource.x;
+                    const resourceDy = hook.y - resource.y;
+                    const resourceDistance = Math.sqrt(resourceDx * resourceDx + resourceDy * resourceDy);
+                    
+                    // 增加碰撞检测的容错范围（增加5像素的容错）
+                    const collisionThreshold = hook.radius + resource.radius + 5;
+                    
+                    if (resourceDistance < collisionThreshold) {
+                        // 收集资源
+                        hook.hasResources = true;
+                        hook.resources.push(resource);
+                        this.resources.splice(j, 1);
+                    }
+                }
+                
                 if (distance < hook.speed) {
                     // 钩子回到玩家
                     if (hook.hasResources && hook.resources.length > 0) {
@@ -1403,7 +1489,10 @@ const Game = {
                     const dy = hook.y - resource.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     
-                    if (distance < hook.radius + resource.radius) {
+                    // 增加碰撞检测的容错范围（增加5像素的容错）
+                    const collisionThreshold = hook.radius + resource.radius + 5;
+                    
+                    if (distance < collisionThreshold) {
                         // 收集资源，但不立即返回
                         hook.hasResources = true;
                         hook.resources.push(resource);
@@ -2101,17 +2190,27 @@ const Game = {
         this.ctx.stroke();
     },
     
-    // 绘制鲨鱼
+    // 绘制鲨鱼（根据移动方向旋转）
     drawSharks() {
         for (const shark of this.sharks) {
             // 根据日夜时间调整鲨鱼亮度（白天亮，夜晚暗）
             const brightness = (1 - this.dayNight.dayProgress) * 0.7 + 0.3; // 白天1.0，夜晚0.3
             const sharkColor = this.adjustColorBrightness(shark.color, brightness);
             
-            // 绘制鲨鱼身体
+            // 保存当前上下文状态
+            this.ctx.save();
+            
+            // 将画布原点移动到鲨鱼位置
+            this.ctx.translate(shark.x, shark.y);
+            
+            // 根据移动方向旋转画布（使鲨鱼面向移动方向）
+            // 注意：鲨鱼的默认方向是向右（x轴正方向），所以不需要额外调整
+            this.ctx.rotate(shark.direction);
+            
+            // 绘制鲨鱼身体（现在以原点为中心）
             this.ctx.fillStyle = sharkColor;
             this.ctx.beginPath();
-            this.ctx.arc(shark.x, shark.y, shark.radius, 0, Math.PI * 2);
+            this.ctx.arc(0, 0, shark.radius, 0, Math.PI * 2);
             this.ctx.fill();
             
             // 鲨鱼边框（根据日夜时间调整亮度）
@@ -2120,42 +2219,46 @@ const Game = {
             this.ctx.lineWidth = 3;
             this.ctx.stroke();
             
-            // 绘制鲨鱼鳍
+            // 绘制鲨鱼鳍（现在以原点为中心）
             this.ctx.fillStyle = sharkColor;
+            
+            // 背鳍（在鲨鱼背部）
             this.ctx.beginPath();
-            // 背鳍
-            this.ctx.moveTo(shark.x, shark.y - shark.radius);
-            this.ctx.lineTo(shark.x + shark.radius * 0.8, shark.y - shark.radius * 1.5);
-            this.ctx.lineTo(shark.x - shark.radius * 0.8, shark.y - shark.radius * 1.5);
+            this.ctx.moveTo(0, -shark.radius);
+            this.ctx.lineTo(shark.radius * 0.8, -shark.radius * 1.5);
+            this.ctx.lineTo(-shark.radius * 0.8, -shark.radius * 1.5);
             this.ctx.closePath();
             this.ctx.fill();
             
-            // 尾鳍
+            // 尾鳍（在鲨鱼尾部，面向移动方向）
             this.ctx.beginPath();
-            this.ctx.moveTo(shark.x + shark.radius, shark.y);
-            this.ctx.lineTo(shark.x + shark.radius * 1.5, shark.y - shark.radius * 0.5);
-            this.ctx.lineTo(shark.x + shark.radius * 1.5, shark.y + shark.radius * 0.5);
+            this.ctx.moveTo(-shark.radius, 0); // 修改：尾鳍在鲨鱼尾部（与移动方向相反）
+            this.ctx.lineTo(-shark.radius * 1.5, -shark.radius * 0.5);
+            this.ctx.lineTo(-shark.radius * 1.5, shark.radius * 0.5);
             this.ctx.closePath();
             this.ctx.fill();
             
-            // 绘制鲨鱼眼睛
+            // 绘制鲨鱼眼睛（在鲨鱼头部，面向移动方向）
             const eyeBrightness = (1 - this.dayNight.dayProgress) * 0.9 + 0.1; // 白天1.0，夜晚0.1
             this.ctx.fillStyle = `rgba(255, 255, 255, ${eyeBrightness})`;
             this.ctx.beginPath();
-            this.ctx.arc(shark.x - shark.radius * 0.5, shark.y - shark.radius * 0.3, shark.radius * 0.3, 0, Math.PI * 2);
+            this.ctx.arc(shark.radius * 0.5, -shark.radius * 0.3, shark.radius * 0.3, 0, Math.PI * 2); // 修改：眼睛在鲨鱼头部（x轴正方向）
             this.ctx.fill();
             
             this.ctx.fillStyle = '#000';
             this.ctx.beginPath();
-            this.ctx.arc(shark.x - shark.radius * 0.5, shark.y - shark.radius * 0.3, shark.radius * 0.15, 0, Math.PI * 2);
+            this.ctx.arc(shark.radius * 0.5, -shark.radius * 0.3, shark.radius * 0.15, 0, Math.PI * 2);
             this.ctx.fill();
             
-            // 绘制鲨鱼嘴巴
+            // 绘制鲨鱼嘴巴（在鲨鱼头部，面向移动方向）
             this.ctx.strokeStyle = '#000';
             this.ctx.lineWidth = 2;
             this.ctx.beginPath();
-            this.ctx.arc(shark.x + shark.radius * 0.3, shark.y, shark.radius * 0.4, 0, Math.PI);
+            this.ctx.arc(shark.radius * 0.5, 0, shark.radius * 0.4, 0, Math.PI); // 修改：嘴巴在鲨鱼头部（x轴正方向）
             this.ctx.stroke();
+            
+            // 恢复上下文状态
+            this.ctx.restore();
         }
     },
     
@@ -2214,6 +2317,9 @@ const Game = {
         this.gameTime = 0;
         this.survivalTime = 0;
         
+        // 设置游戏开始时间（用于鲨鱼生成保护期）
+        this.gameStartTime = 0;
+        
         this.updatePrompt('遊戲開始！收集資源，擴建木筏，生存下去！');
     },
     
@@ -2242,6 +2348,9 @@ const Game = {
         this.resources = [];
         this.hooks = [];
         this.workstations = [];
+        this.sharks = []; // 重置鲨鱼数组
+        this.gameTime = 0; // 重置游戏时间
+        this.survivalTime = 0; // 重置生存时间
         this.initPlayer();
         this.initRaft();
         this.initInventory();
@@ -2267,7 +2376,11 @@ const Game = {
             `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         
         document.getElementById('total-resources').textContent = this.stats.totalResources;
-        document.getElementById('raft-size').textContent = `${Math.sqrt(this.raft.length)}x${Math.sqrt(this.raft.length)}`;
+        
+        // 显示木筏方块数量（直接显示木筏数组的长度）
+        const raftPieceCount = this.raft.length;
+        document.getElementById('raft-size').textContent = `${raftPieceCount}`;
+        
         document.getElementById('crafted-items').textContent = this.stats.craftedItems;
     },
     
@@ -2277,19 +2390,19 @@ const Game = {
             case 'easy':
                 this.settings.hungerRate = 0.003;
                 this.settings.thirstRate = 0.005;
-                this.settings.oxygenConsumption = 0.15;
+                this.settings.oxygenConsumption = 0.075; // 减慢：从0.15减少到0.075（减少50%）
                 this.settings.resourceSpawnRate = 0.035; // 提高：从0.03提高到0.035
                 break;
             case 'normal':
                 this.settings.hungerRate = 0.005;
                 this.settings.thirstRate = 0.007;
-                this.settings.oxygenConsumption = 0.2;
+                this.settings.oxygenConsumption = 0.1; // 减慢：从0.2减少到0.1（减少50%）
                 this.settings.resourceSpawnRate = 0.025; // 提高：从0.02提高到0.025
                 break;
             case 'hard':
                 this.settings.hungerRate = 0.007;
                 this.settings.thirstRate = 0.009;
-                this.settings.oxygenConsumption = 0.25;
+                this.settings.oxygenConsumption = 0.125; // 减慢：从0.25减少到0.125（减少50%）
                 this.settings.resourceSpawnRate = 0.018; // 提高：从0.015提高到0.018
                 break;
         }
